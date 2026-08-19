@@ -41,6 +41,7 @@ test.describe('Quiz steps register-funnel tracking', () => {
 
             const currentStepName = await quizPage.stepAnswer.getStepName();
             expect(currentStepName).not.toBeNull();
+            const isBookingStep = await quizPage.stepAnswer.isBookingStep();
 
             const capture = await registerFunnelListener.captureDuring(currentStepName as string, () =>
                 hasAnswerOptions ? quizPage.stepAnswer.answerFirstOption() : quizPage.stepAnswer.answerTextInput(),
@@ -53,12 +54,14 @@ test.describe('Quiz steps register-funnel tracking', () => {
             const nextStepName = capture.event.properties.transition.to;
 
             expect(capture.event.event).toBe('FRONTEND_REGISTER_FUNNEL');
-            expect(capture.event.properties.eventName).toBe(nextStepName);
+            expect(capture.event.properties.eventName).toBe(
+                isBookingStep ? currentStepName : nextStepName,
+            );
 
             expect(capture.responseStatus).toBe(200);
             expect(capture.responseBody).toEqual({ ok: true });
 
-            if (quizPage.stepAnswer.isInQuizFlow()) {
+            if (!isBookingStep && quizPage.stepAnswer.isInQuizFlow()) {
                 await quizPage.stepAnswer.waitForStepName(nextStepName);
             }
         }

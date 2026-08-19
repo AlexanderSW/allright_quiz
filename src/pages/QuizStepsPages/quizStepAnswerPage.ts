@@ -35,6 +35,10 @@ export class QuizStepAnswerPage {
         return this.stepContainer.getByRole('button', { name: CONTINUE_BUTTON_PATTERN });
     }
 
+    private get bookLessonButton(): Locator {
+        return this.page.getByRole('button', { name: /забронювати урок|book lesson/i });
+    }
+
     // The "N / M" progress counter (e.g. "2 / 13") has no stable testid, only
     // a build-hashed class, so it's located by its text shape instead. The
     // total (M) is the source of truth for how many steps the current A/B
@@ -141,6 +145,10 @@ export class QuizStepAnswerPage {
         return (await this.allNonSubmitButtons.count()) > 0;
     }
 
+    async isBookingStep(): Promise<boolean> {
+        return this.bookLessonButton.isVisible().catch(() => false);
+    }
+
     async hasTextInput(): Promise<boolean> {
         await this.waitForStep();
         if (await this.phoneInput.isVisible().catch(() => false)) {
@@ -224,6 +232,12 @@ export class QuizStepAnswerPage {
 
     async answerFirstOption(): Promise<void> {
         await this.waitForStep();
+
+        if (await this.isBookingStep()) {
+            await this.bookLessonButton.click();
+            return;
+        }
+
         const stepBefore = await this.stepContainer.getAttribute('data-step-name');
 
         // Info-only steps have no real answer, just a single Continue/Next
