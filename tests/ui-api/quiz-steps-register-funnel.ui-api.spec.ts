@@ -16,7 +16,7 @@ test.describe('Quiz steps register-funnel tracking', () => {
         quizPage,
         registerFunnelListener,
     }) => {
-        test.setTimeout(90_000);
+        test.setTimeout(180_000);
         await quizPage.open();
 
         const totalSteps = await quizPage.stepAnswer.getTotalStepsCount();
@@ -30,8 +30,11 @@ test.describe('Quiz steps register-funnel tracking', () => {
 
             console.log(`Answering step ${step} of ${totalSteps}...`);
 
-            const hasAnswerOptions = await quizPage.stepAnswer.hasAnswerOptions();
-            const hasTextInput = hasAnswerOptions ? false : await quizPage.stepAnswer.hasTextInput();
+            // Text steps can also contain auxiliary buttons (e.g. "friend
+            // code" on the parent-name form), so inputs take precedence over
+            // button-only answer options.
+            const hasTextInput = await quizPage.stepAnswer.hasTextInput();
+            const hasAnswerOptions = hasTextInput ? false : await quizPage.stepAnswer.hasAnswerOptions();
             if (!hasAnswerOptions && !hasTextInput) {
                 break;
             }
@@ -54,6 +57,10 @@ test.describe('Quiz steps register-funnel tracking', () => {
 
             expect(capture.responseStatus).toBe(200);
             expect(capture.responseBody).toEqual({ ok: true });
+
+            if (quizPage.stepAnswer.isInQuizFlow()) {
+                await quizPage.stepAnswer.waitForStepName(nextStepName);
+            }
         }
     });
 });

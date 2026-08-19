@@ -7,12 +7,6 @@ import { faker } from '@faker-js/faker';
 // hardcoded to one language.
 const CONTINUE_BUTTON_PATTERN = /^\s*(продовжити|continue|далі|next)\s*$/i;
 
-// The "who is filling this form" interstitial (child vs parent) renders as a
-// <dialog>, not inside the step container, and blocks clicks on the step
-// underneath until answered. It only appears on the parent-name step, but is
-// handled generically by presence rather than being tied to one step name.
-const WHO_FILLS_FORM_PARENT_OPTION_PATTERN = /мати або батько|parent/i;
-
 // Generic per-step page object. Every quiz step renders inside a container
 // tagged with data-step-name="<step>" regardless of which A/B variant is
 // active, so this is the one stable selector across the whole quiz. Answer
@@ -50,21 +44,70 @@ export class QuizStepAnswerPage {
     }
 
     // Text-input steps (name/phone/email) have no answer buttons, only an
-    // input and a submit button.
-    private get textInput(): Locator {
-        return this.stepContainer.locator('input:not([type="hidden"])').first();
+    // input and a submit button. Scoped by the exact data-step-name value
+    // (not stepContainer's generic .first()), since a stale step can
+    // otherwise be matched while the previous one is still unmounting.
+    private stepContainerFor(stepName: string): Locator {
+        return this.page.locator(`[data-step-name="${stepName}"]`);
     }
 
-    private get submitButton(): Locator {
-        return this.stepContainer.locator('button[type="submit"]');
+    private textInputFor(stepName: string): Locator {
+        return this.stepContainerFor(stepName).locator('input:not([type="hidden"])').first();
     }
 
+    private get parentNameInput(): Locator {
+        return this.page.locator('[id="user-info-name"] input');
+    }
+
+    private get phoneInput(): Locator {
+        return this.page.locator('input[type="tel"]');
+    }
+
+    private get phoneCountrySelector(): Locator {
+        return this.page.locator('button.iti__selected-country');
+    }
+
+    private async clickAndFillPhone(phone: string): Promise<void> {
+        for (let attempt = 0; attempt < 3; attempt++) {
+            try {
+                await this.phoneInput.click({ timeout: 5_000 });
+                await this.phoneInput.fill(phone, { timeout: 5_000 });
+                return;
+            } catch (error) {
+                if (attempt === 2) {
+                    throw error;
+                }
+            }
+        }
+    }
+
+    private submitButtonFor(stepName: string): Locator {
+        return this.stepContainerFor(stepName).locator('button[type="submit"]');
+    }
+
+    private get leavingPagePopupCloseButton(): Locator {
+        return this.page.locator('.popup-leaving-page button');
+    }
+
+    // Both choices have an empty data-mode value, so select the second
+    // adjacent button ("Я — мати або батько") structurally.
     private get whoFillsFormParentOption(): Locator {
-        return this.page.getByRole('dialog').getByRole('button', { name: WHO_FILLS_FORM_PARENT_OPTION_PATTERN });
+        return this.page.locator('.ui-modal--dialog-center button[data-mode] + button[data-mode]');
+    }
+
+    private async dismissBlockingPopups(): Promise<void> {
+        if (await this.leavingPagePopupCloseButton.isVisible().catch(() => false)) {
+            await this.leavingPagePopupCloseButton.click();
+        }
+        if (await this.whoFillsFormParentOption.isVisible().catch(() => false)) {
+            await this.whoFillsFormParentOption.click();
+        }
     }
 
     async waitForStep(): Promise<void> {
+        await this.dismissBlockingPopups();
         await this.stepContainer.waitFor({ state: 'visible' });
+        await this.dismissBlockingPopups();
     }
 
     // The final step's submit navigates away from the quiz entirely (real
@@ -77,6 +120,11 @@ export class QuizStepAnswerPage {
     async getStepName(): Promise<string | null> {
         await this.waitForStep();
         return this.stepContainer.getAttribute('data-step-name');
+    }
+
+    async waitForStepName(stepName: string): Promise<void> {
+        await this.page.locator(`[data-step-name="${stepName}"]`).first().waitFor({ state: 'visible' });
+        await this.dismissBlockingPopups();
     }
 
     async getTotalStepsCount(): Promise<number> {
@@ -95,42 +143,79 @@ export class QuizStepAnswerPage {
 
     async hasTextInput(): Promise<boolean> {
         await this.waitForStep();
-        return (await this.textInput.count()) > 0;
+        if (await this.phoneInput.isVisible().catch(() => false)) {
+            return true;
+        }
+        if (await this.phoneCountrySelector.isVisible().catch(() => false)) {
+            await this.phoneInput.waitFor({ state: 'visible' });
+            return true;
+        }
+        if (await this.parentNameInput.isVisible().catch(() => false)) {
+            return true;
+        }
+        if ((await this.allNonSubmitButtons.count()) > 0) {
+            return false;
+        }
+        const stepName = await this.getStepName();
+        if (!stepName) {
+            return false;
+        }
+        return (await this.textInputFor(stepName).count()) > 0;
     }
 
-    // Fills the step's input with faker-generated data (picked by input
-    // type/name, since name/phone/email steps share the same shape) and
-    // submits it.
+    // Fills the step's input with faker-generated data and submits it. The
+    // phone step is handled separately since it needs an explicit selector
+    // and a fixed +380 format, not the generic name/email path.
     async answerTextInput(): Promise<void> {
         await this.waitForStep();
-        const input = this.textInput;
+
+        const phoneInput = this.phoneInput;
+        const isPhoneStep =
+            await phoneInput.isVisible().catch(() => false)
+            || await this.phoneCountrySelector.isVisible().catch(() => false);
+        if (isPhoneStep) {
+            await phoneInput.waitFor({ state: 'visible' });
+            const phone = `+38063${faker.string.numeric(7)}`;
+            await this.clickAndFillPhone(phone);
+            // The phone-mask state is updated only after a native keyboard
+            // input event. Add and remove a digit so the submitted value
+            // remains the generated +38063xxxxxxx number.
+            await phoneInput.press('End');
+            await phoneInput.type('0');
+            await phoneInput.press('Backspace');
+            await this.page.locator('button[type="submit"]:visible').click();
+            return;
+        }
+
+        // The name input has a stable form id, while its submit button is a
+        // sibling rather than a descendant of that id.
+        if (await this.parentNameInput.isVisible().catch(() => false)) {
+            await this.parentNameInput.fill(faker.person.firstName());
+            await this.page.locator('button[type="submit"]:visible').click();
+
+            await this.whoFillsFormParentOption.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
+            await this.dismissBlockingPopups();
+            return;
+        }
+
+        const stepName = (await this.getStepName()) as string;
+
+        const input = this.textInputFor(stepName);
         const type = await input.getAttribute('type');
         const name = await input.getAttribute('name');
         const value = this.generateFakeValueFor(type, name);
 
-        // All these fields are backed by JS input masks/validators that only
-        // react to real keystrokes — a plain .fill() sets the DOM value
-        // without the framework noticing, leaving the submit button disabled
-        // or validation still reporting the field as empty.
         await input.click();
-        await this.page.keyboard.press('Control+a');
-        await this.page.keyboard.type(value);
-
-        await this.submitButton.click();
+        await input.fill(value);
+        await this.submitButtonFor(stepName).click();
 
         // The parent-name step shows a blocking "who fills this form"
         // dialog after typing the name; answering it both dismisses the
         // dialog and advances to the next step.
-        if (await this.whoFillsFormParentOption.isVisible().catch(() => false)) {
-            await this.whoFillsFormParentOption.click();
-        }
+        await this.dismissBlockingPopups();
     }
 
     private generateFakeValueFor(type: string | null, name: string | null): string {
-        if (type === 'tel' || name === 'phone') {
-            // 9 digits fits the "+380 XX XXX XXXX" mask shown on the phone step.
-            return faker.string.numeric(9);
-        }
         if (type === 'email' || name === 'email') {
             return faker.internet.email();
         }
@@ -150,6 +235,7 @@ export class QuizStepAnswerPage {
         } else {
             await this.allNonSubmitButtons.first().click();
         }
+        await this.dismissBlockingPopups();
 
         // Multi-select steps stay on the same step after picking an answer
         // and need an explicit Continue click; single-select steps
