@@ -10,3 +10,4 @@ node_modules/
 .history
 requests_responses
 .playwright-cli
+.env
