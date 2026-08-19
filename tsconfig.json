@@ -3,7 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "lib": ["ES2022", "DOM"],
-    "types": ["node", "@types/node"],
+    "types": ["node"],
     "moduleResolution": "bundler",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
@@ -14,6 +14,7 @@
   "include": [
     "tests/**/*",
     "data/**/*",
+    "src/**/*",
     "playwright.config.ts"
 , "src/pages/PaymentsPages", "src/pages/InvoicesPages", "src/pages/MessagingTemplatesPages", "src/pages/LoansPages", "src/pages/ClientPages/clientCreateEdit.page.ts", "src/pages/ClientPages/clientInformation.page.ts", "src/pages/ClientPages/clientNewApplicationPage.ts", "src/pages/ClientPages/clientComments.page.ts", "src/pages/ClientPages/erp-clientsAndAplications.page.ts", "src/pages/LoginPages/confirmationPopup.page.ts", "src/pages/LoginPages/erp-login.page.ts"  ]
 }

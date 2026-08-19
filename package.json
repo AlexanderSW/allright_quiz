@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "pw:debug": "playwright-cli close-all && playwright-cli open --browser=chrome --headed --persistent",
+    "pw:clean": "node -e \"const fs=require('fs'); for (const p of ['.playwright-cli','.playwright-mcp','test-results','playwright-report']) fs.rmSync(p,{recursive:true,force:true});\"",
+    "pw:fresh": "npm run pw:clean && npm run pw:debug"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
