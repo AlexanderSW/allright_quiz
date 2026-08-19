@@ -3,6 +3,7 @@ import { quizStartUrl } from '../config/env';
 import { QuizAnswersDto } from '../data/dto/quizAnswersDto';
 import { SignUpFormPage } from './SignUpPages/signUpFormPage';
 import { QuizStepsPage } from './QuizStepsPages/quizStepsPage';
+import { QuizStepAnswerPage } from './QuizStepsPages/quizStepAnswerPage';
 import { QuizConfirmationPage } from './ConfirmationPages/quizConfirmationPage';
 
 // Thin top-level page object around the quiz. Deliberately has no per-step
@@ -11,11 +12,13 @@ import { QuizConfirmationPage } from './ConfirmationPages/quizConfirmationPage';
 export class QuizPage {
     readonly signUpForm: SignUpFormPage;
     readonly steps: QuizStepsPage;
+    readonly stepAnswer: QuizStepAnswerPage;
     readonly confirmation: QuizConfirmationPage;
 
     constructor(private readonly page: Page) {
         this.signUpForm = new SignUpFormPage(page);
         this.steps = new QuizStepsPage(page);
+        this.stepAnswer = new QuizStepAnswerPage(page);
         this.confirmation = new QuizConfirmationPage(page);
     }
 
