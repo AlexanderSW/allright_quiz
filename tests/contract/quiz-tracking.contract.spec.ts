@@ -13,17 +13,17 @@ type QuizTrackingEventDto =
     | UnavailableSlotsEventDto;
 
 const trackingCases: Array<{
-    eventName: string;
+    event: string;
     build: () => QuizTrackingEventDto;
 }> = [
-    { eventName: 'FRONTEND_REGISTER_FUNNEL', build: buildRegisterFunnelEvent },
-    { eventName: 'FRONTEND_UNAVAILABLE_SLOTS', build: buildUnavailableSlotsEvent },
-    { eventName: 'FRONTEND_DASHBOARD', build: buildDashboardViewEvent },
+    { event: 'FRONTEND_REGISTER_FUNNEL', build: buildRegisterFunnelEvent },
+    { event: 'FRONTEND_UNAVAILABLE_SLOTS', build: buildUnavailableSlotsEvent },
+    { event: 'FRONTEND_DASHBOARD', build: buildDashboardViewEvent },
 ];
 
 test.describe('Quiz tracking ingestion API contract', () => {
     for (const trackingCase of trackingCases) {
-        test(`${trackingCase.eventName} is accepted by its configured stream`, async ({ request }) => {
+        test(`${trackingCase.event} is accepted by its configured stream`, async ({ request }) => {
             const jitsu = await getJitsuConfig(request);
             const event = trackingCase.build();
             const response = await sendJitsuTrackingEvent(request, jitsu, event);
