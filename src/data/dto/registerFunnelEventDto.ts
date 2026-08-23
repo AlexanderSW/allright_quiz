@@ -9,7 +9,9 @@ export interface RegisterFunnelEventDto {
         funnelType: string;
         fragment: number;
         transition: {
-            from: string;
+            // The initial WATCHED event has only `to`; transition events also
+            // include `from`.
+            from?: string;
             to: string;
         };
         transitionFromAnswer: number | string | null;

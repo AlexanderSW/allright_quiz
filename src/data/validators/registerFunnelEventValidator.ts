@@ -30,8 +30,15 @@ export function assertValidRegisterFunnelEvent(payload: unknown): RegisterFunnel
     if (typeof properties.fragment !== 'number') {
         throw new Error('"properties.fragment" must be a number');
     }
-    if (!properties.transition || typeof properties.transition.from !== 'string' || typeof properties.transition.to !== 'string') {
-        throw new Error('"properties.transition" must have string "from" and "to"');
+    if (
+        !properties.transition
+        || typeof properties.transition.to !== 'string'
+        || (
+            properties.transition.from !== undefined
+            && typeof properties.transition.from !== 'string'
+        )
+    ) {
+        throw new Error('"properties.transition" must have string "to" and optional string "from"');
     }
 
     if (typeof event.anonymousId !== 'string') {
