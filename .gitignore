@@ -8,6 +8,7 @@ node_modules/
 /playwright/.auth/
 
 .history
-requests_responses
+requests_responses/*
+!requests_responses/list_of_steps.txt
 .playwright-cli
 .env

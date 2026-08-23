@@ -23,12 +23,17 @@ test.describe('Quiz steps register-funnel tracking', () => {
         console.log(`Total steps in this A/B variant: ${totalSteps}`);
         expect(totalSteps).toBeGreaterThan(0);
 
-        for (let step = 1; step <= totalSteps; step++) {
+        // The progress counter counts question fragments, while some A/B
+        // variants insert info-only screens between them. Allow enough
+        // transitions for those screens and stop only when the quiz flow is
+        // actually left.
+        const maxTransitions = totalSteps * 3;
+        for (let transition = 1; transition <= maxTransitions; transition++) {
             if (!quizPage.stepAnswer.isInQuizFlow()) {
                 break;
             }
 
-            console.log(`Answering step ${step} of ${totalSteps}...`);
+            console.log(`Answering transition ${transition} (quiz has ${totalSteps} fragments)...`);
 
             // Text steps can also contain auxiliary buttons (e.g. "friend
             // code" on the parent-name form), so inputs take precedence over
@@ -42,9 +47,23 @@ test.describe('Quiz steps register-funnel tracking', () => {
             const currentStepName = await quizPage.stepAnswer.getStepName();
             expect(currentStepName).not.toBeNull();
             const isBookingStep = await quizPage.stepAnswer.isBookingStep();
+            const answerCurrentStep = () => hasAnswerOptions
+                ? quizPage.stepAnswer.answerFirstOption()
+                : quizPage.stepAnswer.answerTextInput();
 
-            const capture = await registerFunnelListener.captureDuring(currentStepName as string, () =>
-                hasAnswerOptions ? quizPage.stepAnswer.answerFirstOption() : quizPage.stepAnswer.answerTextInput(),
+            // Booking creates the lesson and leaves the funnel. It does not
+            // emit another step-to-step REGISTER_FUNNEL transition.
+            if (isBookingStep) {
+                await answerCurrentStep();
+                await expect.poll(() => quizPage.stepAnswer.isInQuizFlow(), {
+                    timeout: 20_000,
+                }).toBe(false);
+                break;
+            }
+
+            const capture = await registerFunnelListener.captureDuring(
+                currentStepName as string,
+                answerCurrentStep,
             );
 
             // The final step (phone submission) navigates away from the quiz
@@ -54,16 +73,16 @@ test.describe('Quiz steps register-funnel tracking', () => {
             const nextStepName = capture.event.properties.transition.to;
 
             expect(capture.event.event).toBe('FRONTEND_REGISTER_FUNNEL');
-            expect(capture.event.properties.eventName).toBe(
-                isBookingStep ? currentStepName : nextStepName,
-            );
+            expect(capture.event.properties.eventName).toBe(nextStepName);
 
             expect(capture.responseStatus).toBe(200);
             expect(capture.responseBody).toEqual({ ok: true });
 
-            if (!isBookingStep && quizPage.stepAnswer.isInQuizFlow()) {
+            if (quizPage.stepAnswer.isInQuizFlow()) {
                 await quizPage.stepAnswer.waitForStepName(nextStepName);
             }
         }
+
+        expect(quizPage.stepAnswer.isInQuizFlow()).toBe(false);
     });
 });
