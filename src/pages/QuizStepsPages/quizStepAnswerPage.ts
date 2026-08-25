@@ -39,6 +39,10 @@ export class QuizStepAnswerPage {
         return this.page.getByRole('button', { name: /забронювати урок|book lesson/i });
     }
 
+    private get postBookingContinueButton(): Locator {
+        return this.page.getByRole('button', { name: /^\s*(далі|next)\s*$/i });
+    }
+
     // The "N / M" progress counter (e.g. "2 / 13") has no stable testid, only
     // a build-hashed class, so it's located by its text shape instead. The
     // total (M) is the source of truth for how many steps the current A/B
@@ -85,8 +89,12 @@ export class QuizStepAnswerPage {
         }
     }
 
-    private submitButtonFor(stepName: string): Locator {
-        return this.stepContainerFor(stepName).locator('button[type="submit"]');
+    // Transitions are animated, so the previous and current forms can both
+    // remain visible for a short time. fill() focuses the input, so bind the
+    // submit button to that focused input's form instead of using a page-wide
+    // visible selector.
+    private get focusedInputSubmitButton(): Locator {
+        return this.page.locator('form:has(input:focus) button[type="submit"]');
     }
 
     private get leavingPagePopupCloseButton(): Locator {
@@ -149,6 +157,27 @@ export class QuizStepAnswerPage {
         return this.bookLessonButton.isVisible().catch(() => false);
     }
 
+    // The personalized quiz leaves the funnel immediately after booking.
+    // Charlie first opens a Telegram preparation screen, which requires one
+    // more explicit "Next" click before the dashboard is reached.
+    async completeBooking(): Promise<void> {
+        const bookingUrl = this.page.url();
+
+        await Promise.all([
+            this.page.waitForURL((url) => url.href !== bookingUrl, { timeout: 20_000 }),
+            this.bookLessonButton.click(),
+        ]);
+
+        if (/\/telegram-bot(?:[/?#]|$)/i.test(this.page.url())) {
+            await this.postBookingContinueButton.waitFor({ state: 'visible' });
+            await this.postBookingContinueButton.click();
+        }
+
+        await this.page.waitForURL((url) => !url.pathname.includes('/sign-up/'), {
+            timeout: 20_000,
+        });
+    }
+
     async hasTextInput(): Promise<boolean> {
         await this.waitForStep();
         if (await this.phoneInput.isVisible().catch(() => false)) {
@@ -191,7 +220,7 @@ export class QuizStepAnswerPage {
             await phoneInput.press('End');
             await phoneInput.type('0');
             await phoneInput.press('Backspace');
-            await this.page.locator('button[type="submit"]:visible').click();
+            await this.focusedInputSubmitButton.click();
             return;
         }
 
@@ -199,7 +228,7 @@ export class QuizStepAnswerPage {
         // sibling rather than a descendant of that id.
         if (await this.parentNameInput.isVisible().catch(() => false)) {
             await this.parentNameInput.fill(faker.person.firstName());
-            await this.page.locator('button[type="submit"]:visible').click();
+            await this.focusedInputSubmitButton.click();
 
             await this.whoFillsFormParentOption.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => undefined);
             await this.dismissBlockingPopups();
@@ -215,7 +244,7 @@ export class QuizStepAnswerPage {
 
         await input.click();
         await input.fill(value);
-        await this.submitButtonFor(stepName).click();
+        await this.focusedInputSubmitButton.click();
 
         // The parent-name step shows a blocking "who fills this form"
         // dialog after typing the name; answering it both dismisses the
